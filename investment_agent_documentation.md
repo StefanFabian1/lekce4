@@ -13,6 +13,8 @@
 - Porovnanie rôznych investičných možností
 - Odporúčania pre alokáciu aktív
 - Vysvetlenie investičných konceptov
+- Validácia vstupov a spracovanie chýb
+- Spracovanie extrémnych scenárov
 
 ### Kľúčové zmeny v kóde
 
@@ -20,16 +22,25 @@
 ```python
 def calculate_compound_interest(principal: float, rate: float, years: int) -> Dict:
     """Calculate compound interest and growth."""
+    validation = validate_inputs(principal=principal, rate=rate, years=years)
+    if not validation["is_valid"]:
+        return {"error": validation["errors"]}
     final_amount = principal * (1 + rate) ** years
     return {"final_amount": round(final_amount, 2), ...}
 
 def calculate_portfolio_risk(equities: float, bonds: float, cash: float) -> Dict:
     """Calculate portfolio risk based on asset allocation."""
+    validation = validate_inputs(equities=equities, bonds=bonds, cash=cash)
+    if not validation["is_valid"]:
+        return {"error": validation["errors"]}
     risk_score = (equities * 0.8 + bonds * 0.3 + cash * 0.1) / 100
     return {"risk_score": round(risk_score, 2), ...}
 
 def compare_investment_options(amount: float, years: int) -> Dict:
     """Compare different investment options."""
+    validation = validate_inputs(principal=amount, years=years)
+    if not validation["is_valid"]:
+        return {"error": validation["errors"]}
     returns = {
         "savings_account": 0.02,
         "bonds": 0.04,
@@ -38,7 +49,30 @@ def compare_investment_options(amount: float, years: int) -> Dict:
     }
 ```
 
-2. **Vylepšený systémový prompt**
+2. **Validácia vstupov**
+```python
+def validate_inputs(principal: float = None, rate: float = None, years: float = None, 
+                   equities: float = None, bonds: float = None, cash: float = None) -> Dict:
+    """Validate input parameters and return error messages if any."""
+    errors = []
+    
+    if principal is not None and principal <= 0:
+        errors.append("Výška investície musí byť kladné číslo.")
+    
+    if years is not None:
+        if years <= 0:
+            errors.append("Investičný horizont musí byť kladné číslo.")
+        elif years < 0.1:  # Menej ako 1 mesiac
+            errors.append("Minimálny investičný horizont je 1 mesiac.")
+        elif years > 100:
+            errors.append("Maximálny investičný horizont je 100 rokov.")
+    
+    # ... ďalšie validácie ...
+    
+    return {"is_valid": len(errors) == 0, "errors": errors}
+```
+
+3. **Vylepšený systémový prompt**
 ```python
 sys_msg = SystemMessage(content="""You are an investment advisor assistant. You can:
 1. Calculate compound interest and investment growth
@@ -46,68 +80,115 @@ sys_msg = SystemMessage(content="""You are an investment advisor assistant. You 
 3. Compare different investment options
 4. Provide investment recommendations
 5. Explain investment concepts and strategies
+
+Always:
+- Validate inputs and provide clear error messages
+- Handle edge cases gracefully
+- Explain why the input is invalid if needed
+- Provide guidance on correct input format
+- Suggest reasonable alternatives
 """)
 ```
 
-## 2. Ukážka vylepšených odpovedí
+## 2. Testovanie a výsledky
 
-### Pred úpravou (Interest Bot)
+### Testovanie "not happy day" scenárov
+
+1. **Neplatné vstupy - záporné čísla**
 ```
-User: Calculate returns for $50,000
-Bot: Let me calculate that for you.
-Monthly payment: $500
-Total interest: $10,000
-```
-
-### Po úprave (Investment Advisor)
-```
-User: Porovnaj investičné možnosti pre 100 000 na 10 rokov.
-Assistant: Tu sú rôzne investičné možnosti pre vašu investíciu 100 000 na 10 rokov:
-
-1. Sporiaci účet (nízke riziko):
-   - Konečná suma: 121 899,44
-   - Celkový výnos: 21 899,44
-   - Ročný výnos: 2%
-
-2. Obligácie (stredné riziko):
-   - Konečná suma: 148 024,43
-   - Celkový výnos: 48 024,43
-   - Ročný výnos: 4%
-
-3. Akcie (vyššie riziko):
-   - Konečná suma: 215 892,5
-   - Celkový výnos: 115 892,5
-   - Ročný výnos: 8%
-
-Odporúčanie:
-- 50% v akciách pre rast
-- 30% v obligáciách pre stabilitu
-- 10% v nehnuteľnostiach pre diverzifikáciu
-- 10% na sporiacom účte pre likviditu
+User: Vypočítaj mi výnos z -50000€ pri 5% úroku
+Assistant: Výška investície musí byť kladné číslo. Prosím, zadajte kladnú hodnotu.
 ```
 
-### Príklad analýzy rizika
+2. **Neplatné vstupy - nesprávne percentá**
 ```
-User: Aké je riziko portfólia s 70% akcií, 20% obligácií a 10% hotovosti?
-Assistant: Riziko vášho portfólia je hodnotené ako vysoké s rizikovým skóre 0.63. 
-
-- 70% v akciách (vysoké riziko)
-- 20% v obligáciách (stredné riziko)
-- 10% v hotovosti (nízke riziko)
+User: Aké je riziko portfólia s 120% akcií a -20% obligácií?
+Assistant: Podiel akcií musí byť medzi 0% a 100%. Podiel obligácií musí byť medzi 0% a 100%.
 ```
 
-### Príklad vysvetlenia konceptov
+3. **Neúplné informácie**
 ```
-User: Vysvetli mi, čo je to diverzifikácia portfólia.
-Assistant: Diverzifikácia portfólia je investičná stratégia, ktorá spočíva v rozložení investícií do rôznych typov aktív s cieľom znížiť riziko. Predstavte si to ako príslovie "nedávaj všetky vajcia do jedného košíka".
-
-Ak by ste napríklad investovali všetky svoje peniaze do jednej akcie a táto akcia by sa náhle zrútila, stratili by ste veľkú časť alebo všetky svoje investície. Ale ak by ste svoje peniaze rozložili medzi rôzne akcie, dlhopisy, hotovosť, nehnuteľnosti a iné typy aktív, pokles hodnoty jednej akcie by mal na celkové portfólio menší vplyv.
+User: Chcem investovať peniaze
+Assistant: Potrebujem vedieť:
+1. Aká je suma, ktorú plánujete investovať?
+2. Aký je váš investičný horizont?
+3. Aká je vaša tolerancia k riziku?
 ```
 
-## 3. Screenshoty úprav kódu
+4. **Extrémne scenáre - veľmi krátky horizont**
+```
+User: Aký bude výnos z 10000€ pri 5% úroku za 1 deň?
+Assistant: Minimálny investičný horizont je 1 mesiac. Pre krátkodobé investície odporúčam sporiaci účet.
+```
+
+5. **Extrémne scenáre - veľmi dlhý horizont**
+```
+User: Porovnaj investície pre 50000€ na 100 rokov
+Assistant: Maximálny investičný horizont je 100 rokov. Výpočty nezohľadňujú infláciu a iné faktory.
+```
+
+6. **Neočakávané požiadavky**
+```
+User: Ako sa varí guláš?
+Assistant: Prepáčte, ale som špecializovaný na investičné poradenstvo. Na otázky o varení neviem odpovedať.
+```
+
+### Vylepšenia implementované po testovaní
+
+1. **Validácia vstupov**
+   - Kontrola záporných hodnôt
+   - Kontrola percentuálnych hodnôt
+   - Kontrola investičného horizontu
+   - Kontrola súčtu percent
+
+2. **Spracovanie chýb**
+   - Jasné chybové hlásenia
+   - Návody na opravu
+   - Alternatívne návrhy
+
+3. **Extrémne scenáre**
+   - Minimálny investičný horizont (1 mesiac)
+   - Maximálny investičný horizont (100 rokov)
+   - Upozornenia na obmedzenia výpočtov
+
+4. **Neočakávané požiadavky**
+   - Zdvorilé odmietnutie nesúvisiacich otázok
+   - Vysvetlenie obmedzení
+   - Návody na alternatívne zdroje
+
+## 3. Zhrnutie vylepšení
+
+1. **Rozšírená funkcionalita**
+   - Pridaná analýza rizika portfólia
+   - Porovnanie rôznych investičných možností
+   - Výpočty zloženého úroku
+   - Odporúčania pre alokáciu aktív
+   - Validácia vstupov
+   - Spracovanie extrémnych scenárov
+
+2. **Vylepšené odpovede**
+   - Detailnejšie vysvetlenia
+   - Kontextové odporúčania
+   - Vyvážené investičné rady
+   - Zrozumiteľné príklady
+   - Jasné chybové hlásenia
+
+3. **Nové nástroje**
+   - Kalkulácia rizika portfólia
+   - Porovnávanie investičných možností
+   - Výpočty zloženého úroku
+   - Validácia vstupov
+
+4. **Lepšie promptovanie**
+   - Kontextové otázky
+   - Detailnejšie vysvetlenia
+   - Praktické príklady
+   - Zohľadnenie rizikových preferencií
+   - Spracovanie chýb a extrémnych scenárov
+
+## 4. Ukážky kódu
 
 ### Nové nástroje
-![Nové nástroje](tools_screenshot.png)
 ```python
 tools = [
     calculate_compound_interest,
@@ -117,32 +198,6 @@ tools = [
 ```
 
 ### Vylepšený systémový prompt
-![Systémový prompt](prompt_screenshot.png)
 ```python
 sys_msg = SystemMessage(content="""You are an investment advisor assistant...""")
 ```
-
-## 4. Zhrnutie vylepšení
-
-1. **Rozšírená funkcionalita**
-   - Pridaná analýza rizika portfólia
-   - Porovnanie rôznych investičných možností
-   - Výpočty zloženého úroku
-   - Odporúčania pre alokáciu aktív
-
-2. **Vylepšené odpovede**
-   - Detailnejšie vysvetlenia
-   - Kontextové odporúčania
-   - Vyvážené investičné rady
-   - Zrozumiteľné príklady
-
-3. **Nové nástroje**
-   - Kalkulácia rizika portfólia
-   - Porovnávanie investičných možností
-   - Výpočty zloženého úroku
-
-4. **Lepšie promptovanie**
-   - Kontextové otázky
-   - Detailnejšie vysvetlenia
-   - Praktické príklady
-   - Zohľadnenie rizikových preferencií 
